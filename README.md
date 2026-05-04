@@ -1,2 +1,2 @@
 # TheBluesProject
-使用ChucK示範的藍調音樂專題
+A ChucK-Based Exploration of Blues Music
