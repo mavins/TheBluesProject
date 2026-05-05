@@ -105,12 +105,14 @@ fun void compose() {
                0 => index;
                scale[index] + offset => midiNote; 
             }
-            midiNote - 24 => call[bar][half_beat]; //降低兩個八度
+            
+            //BASS 降低三個八度
+            midiNote - 36 => call[bar][half_beat]; 
         }    
     }    
 
     //藍調化：力度層次
-    65 => int bassline;
+    64 => int bassline;
     for( 0 => int bar; bar < progression.size(); bar++ ) {
         for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
             

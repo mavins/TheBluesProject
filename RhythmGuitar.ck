@@ -64,9 +64,9 @@ fun void playChords() {
 
         // 設定音量 (Root, 3rd, 5th, 7th)
         64 => msg[0].data3;                            // Root   
-        60 => msg[1].data3;                            // 3rd
-        60 => msg[2].data3;                            // 5th
-        60 => msg[3].data3;                            // 7th
+        64 => msg[1].data3;                            // 3rd
+        64 => msg[2].data3;                            // 5th
+        64 => msg[3].data3;                            // 7th
 
         /*
         Std.mtof(root - 24) => chordSynth[0].freq;                           // C1   

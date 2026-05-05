@@ -3,23 +3,24 @@
 
 BluesKit.KEY => int key; 
 1::minute / BluesKit.BPM => dur quarter;
-BluesKit.blues @=> int blues[];                 //藍調音階 1, b3, 4, b5, 5, b7
+BluesKit.blues @=> int blues[];            //藍調音階 1, b3, 4, b5, 5, b7
+BluesKit.penta @=> int penta[];            //小調五聲音階 1, b3, 4, 5, b7
 BluesKit.progression @=> string progression[];  //和弦進行
 
 [0, 0, 0, 0, 0, 0] @=> int scale[]; 
-//quarter * 4 => dur barLen; // 一小節的長度
-//barLen * 12 => dur songLen; // 12barblues 全曲長
-//0.0::second => dur leadLen;
-//0.0::second => dur respLen;
-
 int call[progression.size()][8];
 dur length[progression.size()][8];
 int velocity[progression.size()][8];
 
-// --- 1. 旋律軌 (The Lead Soloist) ---
+[0, 0, 0, 0, 0] @=> int r_scale[]; 
+int r_call[progression.size()][8];
+dur r_length[progression.size()][8];
+int r_velocity[progression.size()][8];
+
 fun void compose() {  
+    /*--- Call ---*/
     //調Key
-    for( 0 => int step; step < blues.size(); step++ ) {
+    for( 0 => int step; step < scale.size(); step++ ) {
        key + blues[step] => scale[step];        
     }
 
@@ -41,7 +42,7 @@ fun void compose() {
                 {
                   pos--;  
                 }    
-                0.5 * quarter + length[bar][pos] => length[bar][pos]; //加長休止前的有聲音符1/8拍
+                0.5 * quarter + length[bar][pos] => length[bar][pos]; //累進加長休止前的有聲音符1/8拍
             }
         }    
     }
@@ -95,7 +96,7 @@ fun void compose() {
     }    
 
     //藍調化(3)：力度層次
-    68 => int bassline;
+    64 => int bassline;
     for( 0 => int bar; bar < progression.size(); bar++ ) {
         for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
             
@@ -117,8 +118,113 @@ fun void compose() {
             }    
         }    
     } 
+
+    
+    /* ---Resopnse--- */
+    //調Key
+    for( 0 => int step; step < r_scale.size(); step++ ) {
+       key + penta[step] => r_scale[step];        
+    }
+
+    //回應(1)：隨機音符長度
+    for( 0 => int bar; bar < progression.size(); bar++ ) {
+        for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
+            // Sound:Rest Ratio
+            if (Math.random2(0, 2) == 0) // 1:2
+            {    
+                //sound
+                0.5 * quarter => r_length[bar][half_beat]; //1/8拍
+            }
+            else
+            {
+                //rest
+                0.0 * quarter => r_length[bar][half_beat]; //1/8休止
+                half_beat => int pos;  //目前位置
+                while ( pos > 0 && r_length[bar][pos] == 0.0::second )
+                {
+                  pos--;  
+                }    
+                0.5 * quarter + r_length[bar][pos] => r_length[bar][pos]; //累進加長休止前的有聲音符1/8拍
+            }
+        }    
+    }
+    
+    //回應(2)：隨機藍調音階
+    0 => offset;
+    0 => midiNote;
+    0 => index;
+    for( 0 => int bar; bar < progression.size(); bar++ ) {
+        
+        // 搭配和弦調整音高？
+        //if( progression[bar] == "F7" ) 5 => offset;
+        //else if( progression[bar] == "G7" ) 7 => offset;
+        //else 0 => offset;
+        //
+        
+        for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
+            //隨機選擇音階中的音符
+            Math.random2(0, r_scale.size()-1) => index;
+            
+            if ( half_beat == 0 || half_beat == 4 )
+            {
+               // (主幹音)：1, 5, b7，適合在強拍出現
+               if (index < 3) 0 => index;  //轉為根音
+               r_scale[index] + offset => midiNote; //5, b7維持不變
+            }         
+            /* 
+            else if ( index == 3 ) //隨機抽到經過音
+            {
+               //  (經過音)：b5。規定它必須接在 4 或 5 之後。
+               if ( half_beat > 0 ) //非第一拍
+               {
+                 if ( (call[bar][half_beat - 1] == scale[2] || call[bar][half_beat - 1] == scale[4]) && length[bar][half_beat - 1] > 0.0::second )  
+                    scale[index] + offset => midiNote; 
+               }
+               else
+               {    
+                 //隨機更換b5為其他音符
+                 while( index == 3 ) Math.random2(0, scale.size()-1) => index;
+                 scale[index] + offset => midiNote;
+               }
+            }
+            */         
+            else
+            {    
+                // 加上偏移量
+                r_scale[index] + offset => midiNote;
+                // 偶爾跳高一個八度，增加動態感 (Vibe!)
+                //if( Math.randomf() > 0.6 ) 12 +=> midiNote;
+            }
+            midiNote => r_call[bar][half_beat];
+        }    
+    }    
+
+    //回應(3)：力度層次
+    64 => int r_bassline;
+    for( 0 => int bar; bar < progression.size(); bar++ ) {
+        for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
+            
+            if (  (call[bar][half_beat] == scale[1] || call[bar][half_beat] == scale[3] || call[bar][half_beat] == scale[5])
+               || ( half_beat == 0 || half_beat == 4 )  )
+            {    
+                // 增強藍調音 b3, b5, b7，與1, 3重拍
+                r_bassline + 5 => r_velocity[bar][half_beat];
+            }
+            else if (  (call[bar][half_beat] == scale[0] || call[bar][half_beat] == scale[2] || call[bar][half_beat] == scale[4])
+                    && ( half_beat != 0 || half_beat != 4 )  )
+            {
+                // 減弱非強拍的穩定音（和弦根音）1, 4, 5
+                r_bassline - 5 => r_velocity[bar][half_beat];
+            }
+            else
+            {
+                r_bassline => r_velocity[bar][half_beat];
+            }    
+        }    
+    }   
 }
 
+// --- 1. 旋律軌 (The Lead Soloist) ---
 fun void playLead() {
     MidiOut mout;
     MidiMsg msg;
@@ -135,35 +241,41 @@ fun void playLead() {
                                                 //29 	Overdriven Guitar 	電吉他（破音）
                                                 //30 	Distortion Guitar 	電吉他（失真）
                                                 //31 	Guitar harmonics 	吉他泛音
-    196 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 5th
-    25 => msg.data2;    //25 	Acoustic Guitar(steel) 	木吉他（鋼弦）
-    mout.send(msg);
+    //196 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 5th
+    //30 => msg.data2;    //30 	Distortion Guitar 	電吉他（失真）
+    //mout.send(msg);
 
     for( 0 => int bar; bar < progression.size(); bar++ ) {
+        if ( (bar % 4) < 2 )
+        {    
+            196 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 5th
+            30 => msg.data2;    //30 	Distortion Guitar 	電吉他（失真）
+            mout.send(msg);
+        }
         for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
             call[bar][half_beat] => msg.data2;     //    
             velocity[bar][half_beat] => msg.data3;
-            if ( length[bar][half_beat] > 0.0::second )
-              <<<msg.data2, length[bar][half_beat] / quarter>>>;
             // data1=148=1001 0000, 1001=Note On,  0100=Chan 5th
             // data1=132=1000 0000, 1000=Note Off, 0100=Chan 5th
-            148 => msg.data1;
-            mout.send(msg);
-            length[bar][half_beat] * 0.9 => now;
-            132 => msg.data1;
-            mout.send(msg);
-            length[bar][half_beat] * 0.1 => now;
-            
-            //leadLen + length[bar][beat] => leadLen;
-            //if (leadLen > songLen) {break;}
+            if ( (bar % 4) < 2 )
+            {    
+                if ( length[bar][half_beat] > 0.0::second )
+                  <<<"Call = ", msg.data2, length[bar][half_beat] / quarter>>>;
+                148 => msg.data1;
+                mout.send(msg);
+                length[bar][half_beat] * 0.9 => now;
+                132 => msg.data1;
+                mout.send(msg);
+                length[bar][half_beat] * 0.1 => now;
+            }
+            else
+                length[bar][half_beat] => now; 
         }
-        //if (leadLen > songLen) {break;}
     }
 }
 
-/* --- 2. 回應軌 (The Response Soloist) ---
+// --- 2. 回應軌 (The Response Soloist) ---
 fun void playResp() {
-    //
     MidiOut mout;
     MidiMsg msg;
 
@@ -179,47 +291,42 @@ fun void playResp() {
                                                 //29 	Overdriven Guitar 	電吉他（破音）
                                                 //30 	Distortion Guitar 	電吉他（失真）
                                                 //31 	Guitar harmonics 	吉他泛音
-    197 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 6th
-    30 => msg.data2;    //30 	Distortion Guitar 	電吉他（失真）
-    mout.send(msg);
+    //196 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 5th
+    //29 => msg.data2;    //29 	Overdriven Guitar 	電吉他（破音）
+    //mout.send(msg);
 
-    60 => msg.data3;
-    //
-    8 * quarter=> now;
-    respLen + (8 * quarter) => respLen;
-    //
     for( 0 => int bar; bar < progression.size(); bar++ ) {
-        // 動態獲取目前的偏移量
-        int offset;
-        if( progression[bar] == 4 ) 5 => offset;
-        else if( progression[bar] == 5 ) 7 => offset;
-        else 0 => offset;
-
-        for( 0 => int beat; beat < 4; beat++ ) {
-            call[bar][beat] => msg.data2;     //    
-            
-            // data1=149=1001 0000, 1001=Note On,  0100=Chan 6th
-            // data1=133=1000 0000, 1000=Note Off, 0100=Chan 6th
-            149 => msg.data1;
+        if ( (bar % 4) >= 2 )
+        {    
+            196 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 5th
+            29 => msg.data2;    //29 	Overdriven Guitar 	電吉他（破音）
             mout.send(msg);
-            length[bar][beat] * 0.9 => now;
-            133 => msg.data1;
-            mout.send(msg);
-            length[bar][beat] * 0.1 => now;
-            
-            respLen + length[bar][beat] => respLen;
-            if (respLen > songLen) {break;}
+        }    
+        for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
+            r_call[bar][half_beat] => msg.data2;     //    
+            r_velocity[bar][half_beat] => msg.data3;
+            // data1=148=1001 0000, 1001=Note On,  0100=Chan 5th
+            // data1=132=1000 0000, 1000=Note Off, 0100=Chan 5th
+            if ( (bar % 4) >= 2 )
+            {    
+                if ( r_length[bar][half_beat] > 0.0::second )
+                  <<<"Response = ", msg.data2, r_length[bar][half_beat] / quarter>>>;
+                148 => msg.data1;
+                mout.send(msg);
+                r_length[bar][half_beat] * 0.9 => now;
+                132 => msg.data1;
+                mout.send(msg);
+                r_length[bar][half_beat] * 0.1 => now;
+            } 
+            else
+                r_length[bar][half_beat] => now; 
         }
-        if (respLen > songLen) {break;}
     }
-    //
 }
-*/
 
 // --- 啟動 ---
 compose();
-//spork ~ 
-playLead();                 // 啟動主旋律
-//playResp();               // 啟動回應旋律
+spork ~ playLead();       // 啟動主旋律
+playResp();               // 啟動回應旋律
 
 

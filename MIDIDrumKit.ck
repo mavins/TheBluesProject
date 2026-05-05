@@ -1,7 +1,9 @@
 // MIDIDrumKit.ck
 public class MIDIDrumKit {
     MidiOut mout;
-    MidiMsg msg;
+    MidiMsg msg[4];
+    int lock;
+    int index;
     
     fun void setDrumkit(int device)
     {
@@ -10,15 +12,25 @@ public class MIDIDrumKit {
 
         // data1=153=1001 1001, 1001=Note On,  1001=Chan 10th
         // data1=137=1000 1001, 1000=Note Off, 1001=Chan 10th
-        153 => msg.data1;   //data1=153 Note on, channel 10th Percussion instruments(drum, snare, tom, cymbal, hi-hat...) 
+        
+        for ( 0 => index; index < 4; index++ )
+            153 => msg[index].data1;   //data1=153 Note on, channel 10th Percussion instruments(drum, snare, tom, cymbal, hi-hat...) 
+        
+        0 => lock;
+        0 => index;
     }    
 
     // play midi
     fun void playmidi(int pitch, int velocity)
     {
-        pitch => msg.data2;
-        velocity - 20 => msg.data3; //調降音量
-        mout.send(msg);
+        while ( lock ) ; //lock_1 do no-op waiting for lock_0
+        1 => lock;       //lock_0 >>> lock_1   
+            pitch => msg[index].data2;
+            velocity => msg[index].data3;
+            mout.send(msg[index]);
+        0 => lock;   
+        index++;
+        index % 4 => index;
     }
 
     // play mono
