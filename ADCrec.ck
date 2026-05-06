@@ -25,3 +25,5 @@ null @=> w;
 BluesKit.progression @=> string progression[];  //和弦進行
 
 progression.size() * 4 * quarter => now;
+
+Machine.clearVM();

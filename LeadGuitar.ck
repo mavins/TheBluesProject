@@ -224,6 +224,22 @@ fun void compose() {
     }   
 }
 
+fun string pitch(int m) {
+        if ((m % 12) == 0) return "C";
+        if ((m % 12) == 1) return "#C";
+        if ((m % 12) == 2) return "D";
+        if ((m % 12) == 3) return "bE";
+        if ((m % 12) == 4) return "E";
+        if ((m % 12) == 5) return "F";
+        if ((m % 12) == 6) return "bG";
+        if ((m % 12) == 7) return "G";
+        if ((m % 12) == 8) return "#G";
+        if ((m % 12) == 9) return "A";
+        if ((m % 12) == 10) return "bB";
+        if ((m % 12) == 11) return "B";
+        return "";
+}    
+
 // --- 1. 旋律軌 (The Lead Soloist) ---
 fun void playLead() {
     MidiOut mout;
@@ -246,10 +262,10 @@ fun void playLead() {
     //mout.send(msg);
 
     for( 0 => int bar; bar < progression.size(); bar++ ) {
-        if ( (bar % 4) < 2 )
+        if ( (bar % 4) < 2 && bar >= 4 )
         {    
             196 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 5th
-            30 => msg.data2;    //30 	Distortion Guitar 	電吉他（失真）
+            22 => msg.data2;    //22 	Harmonica 	口琴
             mout.send(msg);
         }
         for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
@@ -257,10 +273,10 @@ fun void playLead() {
             velocity[bar][half_beat] => msg.data3;
             // data1=148=1001 0000, 1001=Note On,  0100=Chan 5th
             // data1=132=1000 0000, 1000=Note Off, 0100=Chan 5th
-            if ( (bar % 4) < 2 )
+            if ( (bar % 4) < 2 && bar >= 4 )
             {    
                 if ( length[bar][half_beat] > 0.0::second )
-                  <<<"Call = ", msg.data2, length[bar][half_beat] / quarter>>>;
+                  <<<"Call =", msg.data2, pitch(msg.data2) + Math.floor(msg.data2/12-1) $ int, ("" + length[bar][half_beat] / quarter).substring(0, 3)>>>;
                 148 => msg.data1;
                 mout.send(msg);
                 length[bar][half_beat] * 0.9 => now;
@@ -310,7 +326,7 @@ fun void playResp() {
             if ( (bar % 4) >= 2 )
             {    
                 if ( r_length[bar][half_beat] > 0.0::second )
-                  <<<"Response = ", msg.data2, r_length[bar][half_beat] / quarter>>>;
+                  <<<"Resp =", msg.data2, pitch(msg.data2) + Math.floor(msg.data2/12-1) $ int, ("" + r_length[bar][half_beat] / quarter).substring(0, 3)>>>;
                 148 => msg.data1;
                 mout.send(msg);
                 r_length[bar][half_beat] * 0.9 => now;
