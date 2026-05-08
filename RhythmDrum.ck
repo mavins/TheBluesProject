@@ -1,5 +1,6 @@
 //MIDISequencer
 MIDIDrumKit dk;
+
 // device number: which MIDI output to open
 0 => int device;
 dk.setDrumkit(0);
