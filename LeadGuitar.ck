@@ -21,6 +21,27 @@ int r_velocity[progression.size()][8];
 
 
 //手工作曲----------------------------------------------------------------------
+
+    [[  0,  0,  0,  0,  0,  0,  0,  0],
+     [  0,  0,  0,  0,  0,  0,  0,  0],
+     [  0,  0,  0,  0,  0,  0,  0,  0],
+     [  0,  0,  0,  0,  0,  0,  0,  0],
+    
+     [  0,  0,  0,  0,  0,  0,  0,  0],
+     [  0,  0,  0,  0,  1,  0,  0,  0],
+     [  0,  0,  0,  0,  0,  0,  0,  0],
+     [  0,  0,  0,  0,  0,  0,  0,  0],
+    
+     [  0,  0,  0,  0,  0,  0,  0,  0],
+     [  0,  1,  0,  0,  1,  0,  0,  0],
+     [  0,  0,  0,  0,  0,  0,  0,  0],
+     [  0,  1,  0,  0,  0,  0, -1,  0],
+    
+     [  1,  1,  0,  0,  0,  0,  0,  0],
+     [  0,  0,  1,  1,  1,  0,  0,  0],
+     [  0,  0,  0,  0,  0,  0,  0,  0],
+     [  0,  1, -1,  0,  0,  0,  0,  0]] @=> int bending[][];
+
 fun void hu_compose() {  
     //--- Call ---//
     //調Key
@@ -35,20 +56,19 @@ fun void hu_compose() {
      [ -9, -1, -1, -1, -1, -1, -1, -1],
     
      [ -9, -1,  0,  1, -1, -1,  0, -1],
-     [ -9,  0,  1, -1,  2,  4,  2,  1],
+     [ -9,  0,  1, -1,  2, -1,  2,  1],
      [  0, -1,  1, -1, -9, -1, -1, -1],
      [ -9, -1, -1, -1,  0,  5,  0,  5],
     
      [  0,  1,  0,  5,  0,  1, -9, -1],
-     [ -9,  2,  4, -1,  4,  1,  0, -1],
+     [ -9,  2, -1, -1,  2,  1,  0, -1],
      [  0,  1, -9, -1, -9, -1, -1, -1],
-     [ -9,  2,  4, -1, -1, -1,  2,  1],
+     [ -9,  2, -1, -1, -1, -1,  2, -1],
     
-     [  4,  2,  4, -1, -1, -1, -9, -1],
-     [ -9, -1,  4,  4,  2,  4,  2,  1],
+     [  2,  2, -1, -1, -1, -1, -9, -1],
+     [ -9, -1,  2,  2,  2, -1,  2,  1],
      [  0, -1,  1, -1, -9, -1, -1, -1],
-     [ -9,  4,  1,  0,  5, -1, -9, -1]] @=> int b_index[][];
-    
+     [ -9,  2,  2,  0,  5, -1, -9, -1]] @=> int b_index[][];   
    
     //藍調化(1)：隨機音符長度
     for( 0 => int bar; bar < progression.size(); bar++ ) {
@@ -410,6 +430,45 @@ fun string pitch(int m) {
 }    
 
 // --- 1. 旋律軌 (The Lead Soloist) ---
+// 發送 Pitch Bend 的函式
+fun void sendBend( MidiOut mout, int channel, int up_or_down, dur beat ) {
+    MidiMsg msg;
+
+    // Pitch Bend 狀態碼為 0xE0 (對應 Channel 0)
+    224 + channel => msg.data1; 
+    
+    beat / 128 => dur step;
+    8192 => int value; //基礎值
+    if ( up_or_down == 1)
+    {    
+      for( 0 => int i; i < 64; i++ )
+      {    
+          // 14-bit 數值拆解為兩個 7-bit (LSB 和 MSB)
+          value & 127 => msg.data2;      // 低位元 (LSB)
+          (value >> 7) & 127 => msg.data3; // 高位元 (MSB)
+          mout.send(msg);
+          step => now; 
+          value + 128 => value;
+      }
+      beat * 0.5 => now; 
+    }
+    else if ( up_or_down == -1)
+    {
+      for( 0 => int i; i < 64; i++ )
+      {    
+          // 14-bit 數值拆解為兩個 7-bit (LSB 和 MSB)
+          value & 127 => msg.data2;      // 低位元 (LSB)
+          (value >> 7) & 127 => msg.data3; // 高位元 (MSB)
+          mout.send(msg);
+          step => now; 
+          value - 128 => value;
+      }
+      beat * 0.5 => now; 
+    }
+    else
+      beat => now;       
+}
+
 fun void play_huLead() {
     MidiOut mout;
     MidiMsg msg;
@@ -418,6 +477,7 @@ fun void play_huLead() {
     if ( !mout.open(0) ) me.exit();  //Microsoft GS Wavetable Synth 
         
     //Selecting Instruments >>> data1: 1100 CCCC, data2: 0XXX XXXX
+                                                //22 	Harmonica 	口琴
                                                 //24 	Acoustic Guitar(nylon) 	木吉他（尼龍弦）
                                                 //25 	Acoustic Guitar(steel) 	木吉他（鋼弦）
                                                 //26 	Electric Guitar(jazz) 	電吉他（爵士）
@@ -438,12 +498,16 @@ fun void play_huLead() {
             // data1=132=1000 0000, 1000=Note Off, 0100=Chan 5th
             if ( length[bar][half_beat] > 0.0::second )
               <<<"Call =", msg.data2, pitch(msg.data2) + Math.floor(msg.data2/12-1) $ int, ("" + length[bar][half_beat] / quarter).substring(0, 3)>>>;
+
             148 => msg.data1;
-            mout.send(msg);
-            length[bar][half_beat] * 0.9 => now;
+            mout.send(msg); //Note On
+            //bending or not
+            sendBend( mout, 4, bending[bar][half_beat], length[bar][half_beat] );
+            
+            //length[bar][half_beat] * 0.9 => now;
             132 => msg.data1;
             mout.send(msg);
-            length[bar][half_beat] * 0.1 => now;
+            //length[bar][half_beat] * 0.1 => now;
         }
         <<<"bar =", bar>>>;
     }
