@@ -6,7 +6,7 @@ BluesKit bk;        //BluesKit object instance
 
 // get name
 me.arg(0) => string filename;
-if( filename.length() == 0 ) me.dir()+"blues.wav" => filename;
+if( filename.length() == 0 ) me.dir() + "blues" + ((now / second) $ int) + ".wav" => filename;
 
 // pull samples from the dac
 adc => Gain g => WvOut w => blackhole;

@@ -413,21 +413,41 @@ fun void ma_compose() {
 }
 
 //MIDI PLAYER ---------------------------------------------------------------------------------------
-fun string pitch(int m) {
-        if ((m % 12) == 0) return "C";
-        if ((m % 12) == 1) return "#C";
-        if ((m % 12) == 2) return "D";
-        if ((m % 12) == 3) return "bE";
-        if ((m % 12) == 4) return "E";
-        if ((m % 12) == 5) return "F";
-        if ((m % 12) == 6) return "bG";
-        if ((m % 12) == 7) return "G";
-        if ((m % 12) == 8) return "#G";
-        if ((m % 12) == 9) return "A";
-        if ((m % 12) == 10) return "bB";
-        if ((m % 12) == 11) return "B";
-        return "";
-}    
+
+// 輔助函式：發送 CC
+fun void sendCC( MidiOut mout, int status, int ccNum, int value )
+{
+    MidiMsg msg;
+
+    status => msg.data1;
+    ccNum => msg.data2;
+    value => msg.data3;
+    mout.send(msg);
+}
+
+// 定義 RPN 設定函式
+fun void setPitchBendRange( MidiOut mout, int channel, int semitones )
+{
+    // MIDI CC 訊息的 Status Byte 是 176 + (channel 0~15)
+    176 + channel => int status;
+    
+    // 1. 選取 RPN 0,0 (Pitch Bend Sensitivity)
+    sendCC(mout, status, 101, 0);
+    sendCC(mout, status, 100, 0);
+    
+    // 2. 設定半音數 (Data Entry MSB)
+    sendCC(mout, status, 6, semitones);
+    
+    // 3. 設定音分數 (Data Entry LSB, 通常為 0)
+    sendCC(mout, status, 38, 0);
+    
+    // 4. RPN Null (安全考量，將參數選取重設為 127,127)
+    sendCC(mout, status, 101, 127);
+    sendCC(mout, status, 100, 127);
+    
+    <<< "Pitch Bend Range set to:", semitones, "semitones" >>>;
+}
+
 
 // --- 1. 旋律軌 (The Lead Soloist) ---
 // 發送 Pitch Bend 的函式
@@ -469,6 +489,22 @@ fun void sendBend( MidiOut mout, int channel, int up_or_down, dur beat ) {
       beat => now;       
 }
 
+fun string pitch(int m) {
+        if ((m % 12) == 0) return "C";
+        if ((m % 12) == 1) return "#C";
+        if ((m % 12) == 2) return "D";
+        if ((m % 12) == 3) return "bE";
+        if ((m % 12) == 4) return "E";
+        if ((m % 12) == 5) return "F";
+        if ((m % 12) == 6) return "bG";
+        if ((m % 12) == 7) return "G";
+        if ((m % 12) == 8) return "#G";
+        if ((m % 12) == 9) return "A";
+        if ((m % 12) == 10) return "bB";
+        if ((m % 12) == 11) return "B";
+        return "";
+}    
+
 fun void play_huLead() {
     MidiOut mout;
     MidiMsg msg;
@@ -487,10 +523,14 @@ fun void play_huLead() {
                                                 //30 	Distortion Guitar 	電吉他（失真）
                                                 //31 	Guitar harmonics 	吉他泛音
     196 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 5th
-    22 => msg.data2;    //22 	Harmonica 	口琴
+    29 => msg.data2;    //27 	Electric Guitar(clean) 	電吉他（原音）
     mout.send(msg);
+    
+    // 執行：將 Channel 5 的滑音範圍設定為 2 (全音)
+    setPitchBendRange(mout, 4, 2);
 
     for( 0 => int bar; bar < progression.size(); bar++ ) {
+        <<<"bar =", bar>>>;
         for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
             call[bar][half_beat] => msg.data2;     //    
             velocity[bar][half_beat] => msg.data3;
@@ -509,11 +549,10 @@ fun void play_huLead() {
             mout.send(msg);
             //length[bar][half_beat] * 0.1 => now;
         }
-        <<<"bar =", bar>>>;
     }
 }
 
-fun void playLead() {
+fun void play_maLead() {
     MidiOut mout;
     MidiMsg msg;
 
@@ -617,7 +656,7 @@ hu_compose();               // hu_compose();
 play_huLead();              // 啟動主旋律
 
 //ma_compose();             // ma_compose(); 
-//spork ~ playLead();       // 啟動主旋律
+//spork ~ play_maLead();    // 啟動主旋律
 //playResp();               // 啟動回應旋律
 
 
