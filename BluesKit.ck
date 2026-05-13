@@ -5,7 +5,7 @@ public class BluesKit {
     80 => static int BPM;       //Beats Per Minute(80)
     64 => static int VOL;       //Default Volume
     
-    [0, 3, 5, 6, 7, -2] @=> static int blues[];        //藍調音階 1, b3, 4, b5, 5, b7
+    [0, 3, 5, 6, 7, -2] @=> static int blues[];         //藍調音階 1, b3, 4, b5, 5, b7
     [0, 2, 4, 5, 7, 9, 11] @=> static int major[];      //大調音階 1, 2, 3, 4, 5, 6, 7
     [0, 3, 5, 7, -2] @=> static int penta[];            //小調五聲音階 1, b3, 4, 5, b7
 

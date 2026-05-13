@@ -5,8 +5,8 @@ BluesKit.KEY => int key;
 1::minute / BluesKit.BPM => dur quarter;
 BluesKit.VOL => int bassline;
 
-BluesKit.blues @=> int blues[];            //藍調音階 1, b3, 4, b5, 5, b7
-BluesKit.penta @=> int penta[];            //小調五聲音階 1, b3, 4, 5, b7
+BluesKit.blues @=> int blues[];                 //藍調音階 1, b3, 4, b5, 5, b7
+BluesKit.penta @=> int penta[];                 //小調五聲音階 1, b3, 4, 5, b7
 BluesKit.progression @=> string progression[];  //和弦進行
 
 [0, 0, 0, 0, 0, 0] @=> int scale[]; 
@@ -225,7 +225,7 @@ fun void hu_compose() {
 
 //機械作曲----------------------------------------------------------------------
 fun void ma_compose() {  
-    /*--- Call ---*/
+    /*------------- Call -------------*/
     //調Key
     for( 0 => int step; step < scale.size(); step++ ) {
        key + blues[step] => scale[step];        
@@ -325,7 +325,7 @@ fun void ma_compose() {
         }    
     } 
    
-    /* ---Resopnse--- */
+    /*------------- Resopnse -------------*/
     //調Key
     for( 0 => int step; step < r_scale.size(); step++ ) {
        key + penta[step] => r_scale[step];        
@@ -361,6 +361,11 @@ fun void ma_compose() {
                 //if( Math.randomf() > 0.6 ) 12 +=> midiNote;
             }
             midiNote => r_call[bar][half_beat];
+            // Mi bending
+            if ( index == 2 ) 
+                1 => bending[bar][half_beat];
+            else 
+                0 => bending[bar][half_beat];    
         }    
     }    
 
@@ -523,7 +528,7 @@ fun void play_huLead() {
                                                 //30 	Distortion Guitar 	電吉他（失真）
                                                 //31 	Guitar harmonics 	吉他泛音
     196 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 5th
-    29 => msg.data2;    //27 	Electric Guitar(clean) 	電吉他（原音）
+    30 => msg.data2;    //30 	Distortion Guitar 	電吉他（失真）
     mout.send(msg);
     
     // 執行：將 Channel 5 的滑音範圍設定為 2 (全音)
@@ -542,12 +547,12 @@ fun void play_huLead() {
             148 => msg.data1;
             mout.send(msg); //Note On
             //bending or not
-            sendBend( mout, 4, bending[bar][half_beat], length[bar][half_beat] );
+            sendBend( mout, 4, bending[bar][half_beat], length[bar][half_beat] * 0.99 );
             
             //length[bar][half_beat] * 0.9 => now;
             132 => msg.data1;
             mout.send(msg);
-            //length[bar][half_beat] * 0.1 => now;
+            length[bar][half_beat] * 0.01 => now;
         }
     }
 }
@@ -602,7 +607,7 @@ fun void play_maLead() {
 }
 
 // --- 2. 回應軌 (The Response Soloist) ---
-fun void playResp() {
+fun void play_maResp() {
     MidiOut mout;
     MidiMsg msg;
 
@@ -621,12 +626,14 @@ fun void playResp() {
     //196 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 5th
     //29 => msg.data2;    //29 	Overdriven Guitar 	電吉他（破音）
     //mout.send(msg);
+    // 執行：將 Channel 5 的滑音範圍設定為 2 (全音)
+    setPitchBendRange(mout, 4, 2);
 
     for( 0 => int bar; bar < progression.size(); bar++ ) {
         if ( (bar % 4) >= 2 )
         {    
             196 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 5th
-            29 => msg.data2;    //29 	Overdriven Guitar 	電吉他（破音）
+            30 => msg.data2;    //30 	Distortion Guitar 	電吉他（失真）
             mout.send(msg);
         }    
         for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
@@ -640,10 +647,15 @@ fun void playResp() {
                   <<<"Resp =", msg.data2, pitch(msg.data2) + Math.floor(msg.data2/12-1) $ int, ("" + r_length[bar][half_beat] / quarter).substring(0, 3)>>>;
                 148 => msg.data1;
                 mout.send(msg);
-                r_length[bar][half_beat] * 0.9 => now;
+                //bending or not
+                //if (bending[bar][half_beat] == 1 && r_length[bar][half_beat] > 0.0::second) 
+                //    <<<bending[bar][half_beat]>>>;
+                sendBend( mout, 4, bending[bar][half_beat], r_length[bar][half_beat] * 0.99 );
+                
+                //r_length[bar][half_beat] * 0.9 => now;
                 132 => msg.data1;
                 mout.send(msg);
-                r_length[bar][half_beat] * 0.1 => now;
+                r_length[bar][half_beat] * 0.01 => now;
             } 
             else
                 r_length[bar][half_beat] => now; 
@@ -652,11 +664,11 @@ fun void playResp() {
 }
 
 // --- 啟動 ---
-hu_compose();               // hu_compose(); 
-play_huLead();              // 啟動主旋律
+hu_compose();                 // hu_compose(); 
+play_huLead();                // 啟動主旋律
 
-//ma_compose();             // ma_compose(); 
-//spork ~ play_maLead();    // 啟動主旋律
-//playResp();               // 啟動回應旋律
+//ma_compose();                   // ma_compose(); 
+//spork ~ play_maLead();          // 啟動主旋律
+//play_maResp();                  // 啟動回應旋律
 
 
