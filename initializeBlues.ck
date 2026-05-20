@@ -7,6 +7,6 @@ Machine.add(me.dir()+"/ADCrec.ck");     //BluesKit instance
 
 // Waiting MIDI Message
 Machine.add(me.dir()+"/RhythmDrum.ck");
-Machine.add(me.dir()+"/BassGuitar.ck");
 Machine.add(me.dir()+"/RhythmGuitar.ck");
+Machine.add(me.dir()+"/BassGuitar.ck");
 Machine.add(me.dir()+"/LeadGuitar.ck");

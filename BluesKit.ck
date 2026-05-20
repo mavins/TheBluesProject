@@ -1,6 +1,8 @@
 // BluesKit.ck
 public class BluesKit {
-    
+    static MidiOut @ mout;
+    static MidiMsg @ msg[];
+
     69 => static int KEY;       //C(60), A(69)
     80 => static int BPM;       //Beats Per Minute(80)
     64 => static int VOL;       //Default Volume

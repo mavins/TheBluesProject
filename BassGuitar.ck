@@ -1,8 +1,10 @@
 // --- 全域同步設定 ---
-
+BluesKit.mout @=> MidiOut mout; 
+BluesKit.msg @=> MidiMsg msg[];
 
 BluesKit.KEY => int key; 
 1::minute / BluesKit.BPM => dur quarter;
+BluesKit.VOL + 16 => int bassline;
 BluesKit.major @=> int major[];                 //大調音階 1, 2, 3, 4, 5, 6, 7
 BluesKit.progression @=> string progression[];  //和弦進行
 
@@ -112,7 +114,6 @@ fun void compose() {
     }    
 
     //藍調化：力度層次
-    64 => int bassline;
     for( 0 => int bar; bar < progression.size(); bar++ ) {
         for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
             
@@ -130,38 +131,19 @@ fun void compose() {
 }
 
 fun void playBass() {
-    MidiOut mout;
-    MidiMsg msg;
-
-    // open midi input, exit on fail
-    if ( !mout.open(0) ) me.exit();  //Microsoft GS Wavetable Synth 
-        
-    //Selecting Instruments >>> data1: 1100 CCCC, data2: 0XXX XXXX
-                                                        //32	Acoustic Bass	民謠貝斯
-                                                        //33	Electric Bass(finger)	電貝斯（指奏）
-                                                        //34	Electric Bass(pick)	電貝斯（撥奏）
-                                                        //35	Fretless Bass	無格貝斯
-                                                        //36	Slap Bass 1	捶鉤貝斯 1
-                                                        //37	Slap Bass 2	捶鉤貝斯 2
-                                                        //38	Synth Bass 1	合成貝斯1
-                                                        //39	Synth Bass 2	合成貝斯2
-    197 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 6th
-    34 => msg.data2;    //34	Electric Bass(pick)	電貝斯（撥奏） 
-    mout.send(msg);
-
     for( 0 => int bar; bar < progression.size(); bar++ ) {
         for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
-            call[bar][half_beat] => msg.data2;     //    
-            velocity[bar][half_beat] => msg.data3;
+            call[bar][half_beat] => msg[4].data2;     //    
+            velocity[bar][half_beat] => msg[4].data3;
             //if ( length[bar][half_beat] > 0.0::second )
             //  <<<msg.data2, length[bar][half_beat] / quarter>>>;
-            // data1=148=1001 0000, 1001=Note On,  0101=Chan 6th
-            // data1=132=1000 0000, 1000=Note Off, 0101=Chan 6th
-            149 => msg.data1;
-            mout.send(msg);
+            // data1=148=1001 0000, 1001=Note On,  0101=Chan 5th
+            // data1=132=1000 0000, 1000=Note Off, 0101=Chan 5th
+            148 => msg[4].data1;
+            mout.send(msg[4]);
             length[bar][half_beat] * 0.9 => now;
-            133 => msg.data1;
-            mout.send(msg);
+            132 => msg[4].data1;
+            mout.send(msg[4]);
             length[bar][half_beat] * 0.1 => now;
             
             //leadLen + length[bar][beat] => leadLen;

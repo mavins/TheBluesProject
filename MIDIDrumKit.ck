@@ -2,6 +2,7 @@
 public class MIDIDrumKit {
     MidiOut mout;
     MidiMsg msg[4];
+
     int lock;
     int index;
     
@@ -26,7 +27,7 @@ public class MIDIDrumKit {
         while ( lock ) ; //lock_1 do no-op waiting for lock_0
         1 => lock;       //lock_0 >>> lock_1   
             pitch => msg[index].data2;
-            velocity + 24 => msg[index].data3;
+            velocity => msg[index].data3;
             mout.send(msg[index]);
         0 => lock;   
         index++;

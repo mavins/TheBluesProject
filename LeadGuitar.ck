@@ -1,5 +1,6 @@
 // --- 全域同步設定 ---
-
+BluesKit.mout @=> MidiOut mout; 
+BluesKit.msg @=> MidiMsg msg[];
 
 BluesKit.KEY => int key; 
 1::minute / BluesKit.BPM => dur quarter;
@@ -21,7 +22,6 @@ int r_velocity[progression.size()][8];
 
 
 //手工作曲----------------------------------------------------------------------
-
     [[  0,  0,  0,  0,  0,  0,  0,  0],
      [  0,  0,  0,  0,  0,  0,  0,  0],
      [  0,  0,  0,  0,  0,  0,  0,  0],
@@ -70,11 +70,11 @@ fun void hu_compose() {
      [  0, -1,  1, -1, -9, -1, -1, -1],
      [ -9,  2,  2,  0,  5, -1, -9, -1]] @=> int b_index[][];   
    
-    //藍調化(1)：隨機音符長度
+    //藍調化(1)：手工音符長度
     for( 0 => int bar; bar < progression.size(); bar++ ) {
         for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
             // Sound
-            if (b_index[bar][half_beat] != -1) // 有設定音高
+            if (b_index[bar][half_beat] != -1) // 有設定音高或休止符
             {    
                 0.5 * quarter => length[bar][half_beat]; //1/8拍
             }
@@ -102,8 +102,8 @@ fun void hu_compose() {
         
         for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
             //設定音階指標
-            if (b_index[bar][half_beat] == -9 ) 
-                -9 => midiNote; //休止符
+            if (b_index[bar][half_beat] == -9 || b_index[bar][half_beat] == -1) //休止符或虛音 
+                -1 => midiNote; //休止符
             else
             {    
                 b_index[bar][half_beat] => index;          
@@ -131,12 +131,15 @@ fun void hu_compose() {
             }
             else
             {
-                bassline => velocity[bar][half_beat];
+                if (b_index[bar][half_beat] == -9 || b_index[bar][half_beat] == -1) //休止符或虛音
+                    0 => velocity[bar][half_beat];
+                else
+                    bassline => velocity[bar][half_beat];
             }    
         }    
     } 
    
-    // ---Resopnse--- //
+    /* ---Resopnse--- //
     //調Key
     for( 0 => int step; step < r_scale.size(); step++ ) {
        key + penta[step] => r_scale[step];        
@@ -199,7 +202,7 @@ fun void hu_compose() {
     }
     
     //回應(3)：力度層次
-    64 => int r_bassline;
+    bassline - 16 => int r_bassline;
     for( 0 => int bar; bar < progression.size(); bar++ ) {
         for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
             
@@ -220,7 +223,8 @@ fun void hu_compose() {
                 r_bassline => r_velocity[bar][half_beat];
             }    
         }    
-    }   
+    }
+    */
 }
 
 //機械作曲----------------------------------------------------------------------
@@ -362,7 +366,7 @@ fun void ma_compose() {
             }
             midiNote => r_call[bar][half_beat];
             // Mi bending
-            if ( index == 2 ) 
+            if ( index == 2 )  //2
                 1 => bending[bar][half_beat];
             else 
                 0 => bending[bar][half_beat];    
@@ -393,7 +397,7 @@ fun void ma_compose() {
     }
     
     //回應(3)：力度層次
-    64 => int r_bassline;
+    bassline - 16 => int r_bassline;
     for( 0 => int bar; bar < progression.size(); bar++ ) {
         for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
             
@@ -420,78 +424,61 @@ fun void ma_compose() {
 //MIDI PLAYER ---------------------------------------------------------------------------------------
 
 // 輔助函式：發送 CC
-fun void sendCC( MidiOut mout, int status, int ccNum, int value )
+fun void sendCC( int channel, int ccNum, int value )
 {
-    MidiMsg msg;
-
-    status => msg.data1;
-    ccNum => msg.data2;
-    value => msg.data3;
-    mout.send(msg);
+    //MIDI CC 訊息的 Status Byte 是 176 + (channel 0~15)
+    176 + channel => msg[channel].data1;
+    ccNum => msg[channel].data2;
+    value => msg[channel].data3;
+    mout.send(msg[channel]);
 }
 
-// 定義 RPN 設定函式
-fun void setPitchBendRange( MidiOut mout, int channel, int semitones )
-{
-    // MIDI CC 訊息的 Status Byte 是 176 + (channel 0~15)
-    176 + channel => int status;
-    
-    // 1. 選取 RPN 0,0 (Pitch Bend Sensitivity)
-    sendCC(mout, status, 101, 0);
-    sendCC(mout, status, 100, 0);
-    
-    // 2. 設定半音數 (Data Entry MSB)
-    sendCC(mout, status, 6, semitones);
-    
-    // 3. 設定音分數 (Data Entry LSB, 通常為 0)
-    sendCC(mout, status, 38, 0);
-    
-    // 4. RPN Null (安全考量，將參數選取重設為 127,127)
-    sendCC(mout, status, 101, 127);
-    sendCC(mout, status, 100, 127);
-    
-    <<< "Pitch Bend Range set to:", semitones, "semitones" >>>;
-}
-
-
-// --- 1. 旋律軌 (The Lead Soloist) ---
 // 發送 Pitch Bend 的函式
-fun void sendBend( MidiOut mout, int channel, int up_or_down, dur beat ) {
-    MidiMsg msg;
-
+fun void sendBend( int channel, int up_or_down, dur beat ) {
     // Pitch Bend 狀態碼為 0xE0 (對應 Channel 0)
-    224 + channel => msg.data1; 
-    
-    beat / 128 => dur step;
+    224 + channel => msg[channel].data1; 
     8192 => int value; //基礎值
+    beat / 32 => dur step;
+
     if ( up_or_down == 1)
     {    
-      for( 0 => int i; i < 64; i++ )
+      8191 => value; //基礎值 - 1
+      for( 0 => int i; i < 16; i++ )
       {    
           // 14-bit 數值拆解為兩個 7-bit (LSB 和 MSB)
-          value & 127 => msg.data2;      // 低位元 (LSB)
-          (value >> 7) & 127 => msg.data3; // 高位元 (MSB)
-          mout.send(msg);
+          value & 127 => msg[channel].data2;      // 低位元 (LSB)
+          (value >> 7) & 127 => msg[channel].data3; // 高位元 (MSB)
+          mout.send(msg[channel]);
           step => now; 
-          value + 128 => value;
+          value + 512 => value;
       }
-      beat * 0.5 => now; 
+      beat * 0.5 => now;
     }
     else if ( up_or_down == -1)
     {
-      for( 0 => int i; i < 64; i++ )
+      8192 => int value; //基礎值
+      for( 0 => int i; i < 16; i++ )
       {    
           // 14-bit 數值拆解為兩個 7-bit (LSB 和 MSB)
-          value & 127 => msg.data2;      // 低位元 (LSB)
-          (value >> 7) & 127 => msg.data3; // 高位元 (MSB)
-          mout.send(msg);
+          value & 127 => msg[channel].data2;      // 低位元 (LSB)
+          (value >> 7) & 127 => msg[channel].data3; // 高位元 (MSB)
+          mout.send(msg[channel]);
           step => now; 
-          value - 128 => value;
+          value - 512 => value;
       }
       beat * 0.5 => now; 
     }
     else
-      beat => now;       
+    {    
+        // 14-bit 數值拆解為兩個 7-bit (LSB 和 MSB)
+        //value & 127 => msg[channel].data2;      // 低位元 (LSB)
+        //(value >> 7) & 127 => msg[channel].data3; // 高位元 (MSB)
+        //mout.send(msg[channel]);
+        beat => now;
+    }
+    
+    //強制關閉該通道所有聲音 (All Notes Off)
+    //sendCC( 5, 123, 0 );    
 }
 
 fun string pitch(int m) {
@@ -508,167 +495,114 @@ fun string pitch(int m) {
         if ((m % 12) == 10) return "bB";
         if ((m % 12) == 11) return "B";
         return "";
-}    
+}  
 
-fun void play_huLead() {
-    MidiOut mout;
-    MidiMsg msg;
-
-    // open midi input, exit on fail
-    if ( !mout.open(0) ) me.exit();  //Microsoft GS Wavetable Synth 
-        
-    //Selecting Instruments >>> data1: 1100 CCCC, data2: 0XXX XXXX
-                                                //22 	Harmonica 	口琴
-                                                //24 	Acoustic Guitar(nylon) 	木吉他（尼龍弦）
-                                                //25 	Acoustic Guitar(steel) 	木吉他（鋼弦）
-                                                //26 	Electric Guitar(jazz) 	電吉他（爵士）
-                                                //27 	Electric Guitar(clean) 	電吉他（原音）
-                                                //28 	Electric Guitar(muted) 	電吉他（悶音）
-                                                //29 	Overdriven Guitar 	電吉他（破音）
-                                                //30 	Distortion Guitar 	電吉他（失真）
-                                                //31 	Guitar harmonics 	吉他泛音
-    196 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 5th
-    30 => msg.data2;    //30 	Distortion Guitar 	電吉他（失真）
-    mout.send(msg);
-    
-    // 執行：將 Channel 5 的滑音範圍設定為 2 (全音)
-    setPitchBendRange(mout, 4, 2);
-
+// --- 1. 旋律軌 (The Lead Soloist) ---
+fun void play_huLead() {     
     for( 0 => int bar; bar < progression.size(); bar++ ) {
         <<<"bar =", bar>>>;
         for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
-            call[bar][half_beat] => msg.data2;     //    
-            velocity[bar][half_beat] => msg.data3;
-            // data1=148=1001 0000, 1001=Note On,  0100=Chan 5th
-            // data1=132=1000 0000, 1000=Note Off, 0100=Chan 5th
+            call[bar][half_beat] => msg[5].data2;     //    
+            velocity[bar][half_beat] => msg[5].data3;
+            // data1=149=1001 0000, 1001=Note On,  0100=Chan 6th
+            // data1=133=1000 0000, 1000=Note Off, 0100=Chan 6th
             if ( length[bar][half_beat] > 0.0::second )
-              <<<"Call =", msg.data2, pitch(msg.data2) + Math.floor(msg.data2/12-1) $ int, ("" + length[bar][half_beat] / quarter).substring(0, 3)>>>;
+              <<<"Call =", msg[5].data2, pitch(msg[5].data2) + Math.floor(msg[5].data2/12-1) $ int, ("" + length[bar][half_beat] / quarter).substring(0, 3)>>>;
 
-            148 => msg.data1;
-            mout.send(msg); //Note On
+            149 => msg[5].data1;    //Note On
+            mout.send(msg[5]);      
             //bending or not
-            sendBend( mout, 4, bending[bar][half_beat], length[bar][half_beat] * 0.99 );
-            
-            //length[bar][half_beat] * 0.9 => now;
-            132 => msg.data1;
-            mout.send(msg);
-            length[bar][half_beat] * 0.01 => now;
+            sendBend( 5, bending[bar][half_beat], length[bar][half_beat] * 0.9 );
+
+            133 => msg[5].data1;    //Note Off
+            mout.send(msg[5]);
+            //bending 歸零
+            sendBend( 5, 0, length[bar][half_beat] * 0.1 );
         }
+        //強制關閉該通道所有聲音 (All Notes Off)
+        sendCC( 5, 123, 0 );    
     }
 }
 
 fun void play_maLead() {
-    MidiOut mout;
-    MidiMsg msg;
-
-    // open midi input, exit on fail
-    if ( !mout.open(0) ) me.exit();  //Microsoft GS Wavetable Synth 
-        
-    //Selecting Instruments >>> data1: 1100 CCCC, data2: 0XXX XXXX
-                                                //24 	Acoustic Guitar(nylon) 	木吉他（尼龍弦）
-                                                //25 	Acoustic Guitar(steel) 	木吉他（鋼弦）
-                                                //26 	Electric Guitar(jazz) 	電吉他（爵士）
-                                                //27 	Electric Guitar(clean) 	電吉他（原音）
-                                                //28 	Electric Guitar(muted) 	電吉他（悶音）
-                                                //29 	Overdriven Guitar 	電吉他（破音）
-                                                //30 	Distortion Guitar 	電吉他（失真）
-                                                //31 	Guitar harmonics 	吉他泛音
-    //196 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 5th
-    //30 => msg.data2;    //30 	Distortion Guitar 	電吉他（失真）
-    //mout.send(msg);
-
     for( 0 => int bar; bar < progression.size(); bar++ ) {
         if ( (bar % 4) < 2 && bar >= 4 )
         {    
-            196 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 5th
-            22 => msg.data2;    //22 	Harmonica 	口琴
-            mout.send(msg);
+            <<<"bar =", bar>>>;
+            197 => msg[5].data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 6th
+            22 => msg[5].data2;    //22 	Harmonica 	口琴
+            mout.send(msg[5]);
+            sendCC( 5, 10, 96 );   //定位
         }
         for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
-            call[bar][half_beat] => msg.data2;     //    
-            velocity[bar][half_beat] => msg.data3;
-            // data1=148=1001 0000, 1001=Note On,  0100=Chan 5th
-            // data1=132=1000 0000, 1000=Note Off, 0100=Chan 5th
+            call[bar][half_beat] => msg[5].data2;     //    
+            velocity[bar][half_beat] => msg[5].data3;
+            // data1=149=1001 0000, 1001=Note On,  0100=Chan 6th
+            // data1=133=1000 0000, 1000=Note Off, 0100=Chan 6th
             if ( (bar % 4) < 2 && bar >= 4 )
             {    
                 if ( length[bar][half_beat] > 0.0::second )
-                  <<<"Call =", msg.data2, pitch(msg.data2) + Math.floor(msg.data2/12-1) $ int, ("" + length[bar][half_beat] / quarter).substring(0, 3)>>>;
-                148 => msg.data1;
-                mout.send(msg);
-                length[bar][half_beat] * 0.9 => now;
-                132 => msg.data1;
-                mout.send(msg);
-                length[bar][half_beat] * 0.1 => now;
+                  <<<"Call =", msg[5].data2, pitch(msg[5].data2) + Math.floor(msg[5].data2/12-1) $ int, ("" + length[bar][half_beat] / quarter).substring(0, 3)>>>;
+
+                149 => msg[5].data1;    //Note On
+                mout.send(msg[5]);      
+                //bending or not
+                sendBend( 5, bending[bar][half_beat], length[bar][half_beat] * 0.9 );
+
+                133 => msg[5].data1;    //Note Off
+                mout.send(msg[5]);
+                //bending 歸零
+                sendBend( 5, 0, length[bar][half_beat] * 0.1 );
             }
             else
-                length[bar][half_beat] => now; 
+                sendBend( 5, 0, length[bar][half_beat] );
         }
     }
 }
 
 // --- 2. 回應軌 (The Response Soloist) ---
 fun void play_maResp() {
-    MidiOut mout;
-    MidiMsg msg;
-
-    // open midi input, exit on fail
-    if ( !mout.open(0) ) me.exit();  //Microsoft GS Wavetable Synth 
-        
-    //Selecting Instruments >>> data1: 1100 CCCC, data2: 0XXX XXXX
-                                                //24 	Acoustic Guitar(nylon) 	木吉他（尼龍弦）
-                                                //25 	Acoustic Guitar(steel) 	木吉他（鋼弦）
-                                                //26 	Electric Guitar(jazz) 	電吉他（爵士）
-                                                //27 	Electric Guitar(clean) 	電吉他（原音）
-                                                //28 	Electric Guitar(muted) 	電吉他（悶音）
-                                                //29 	Overdriven Guitar 	電吉他（破音）
-                                                //30 	Distortion Guitar 	電吉他（失真）
-                                                //31 	Guitar harmonics 	吉他泛音
-    //196 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 5th
-    //29 => msg.data2;    //29 	Overdriven Guitar 	電吉他（破音）
-    //mout.send(msg);
-    // 執行：將 Channel 5 的滑音範圍設定為 2 (全音)
-    setPitchBendRange(mout, 4, 2);
-
     for( 0 => int bar; bar < progression.size(); bar++ ) {
         if ( (bar % 4) >= 2 )
         {    
-            196 => msg.data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 5th
-            30 => msg.data2;    //30 	Distortion Guitar 	電吉他（失真）
-            mout.send(msg);
+            <<<"bar =", bar>>>;
+            197 => msg[5].data1;   //data1=192=1100 0000, 1100: Selecting Instruments, 0000: Chan 6th
+            29 => msg[5].data2;    //29 	Overdriven Guitar 	電吉他（破音）
+            mout.send(msg[5]);
+            sendCC( 5, 10, 32 );   //定位
         }    
         for( 0 => int half_beat; half_beat < 8; half_beat++ ) { //half_beat
-            r_call[bar][half_beat] => msg.data2;     //    
-            r_velocity[bar][half_beat] => msg.data3;
-            // data1=148=1001 0000, 1001=Note On,  0100=Chan 5th
-            // data1=132=1000 0000, 1000=Note Off, 0100=Chan 5th
+            r_call[bar][half_beat] => msg[5].data2;     //    
+            r_velocity[bar][half_beat] => msg[5].data3;
+            // data1=149=1001 0000, 1001=Note On,  0100=Chan 6th
+            // data1=133=1000 0000, 1000=Note Off, 0100=Chan 6th
             if ( (bar % 4) >= 2 )
             {    
                 if ( r_length[bar][half_beat] > 0.0::second )
-                  <<<"Resp =", msg.data2, pitch(msg.data2) + Math.floor(msg.data2/12-1) $ int, ("" + r_length[bar][half_beat] / quarter).substring(0, 3)>>>;
-                148 => msg.data1;
-                mout.send(msg);
+                  <<<"Resp =", msg[5].data2, pitch(msg[5].data2) + Math.floor(msg[5].data2/12-1) $ int, ("" + r_length[bar][half_beat] / quarter).substring(0, 3)>>>;
+
+                149 => msg[5].data1;    //Note On
+                mout.send(msg[5]);      
                 //bending or not
-                //if (bending[bar][half_beat] == 1 && r_length[bar][half_beat] > 0.0::second) 
-                //    <<<bending[bar][half_beat]>>>;
-                sendBend( mout, 4, bending[bar][half_beat], r_length[bar][half_beat] * 0.99 );
-                
-                //r_length[bar][half_beat] * 0.9 => now;
-                132 => msg.data1;
-                mout.send(msg);
-                r_length[bar][half_beat] * 0.01 => now;
+                sendBend( 5, bending[bar][half_beat], r_length[bar][half_beat] * 0.9 );
+
+                133 => msg[5].data1;    //Note Off
+                mout.send(msg[5]);
+                //bending 歸零
+                sendBend( 5, 0, r_length[bar][half_beat] * 0.1 );
             } 
             else
-                r_length[bar][half_beat] => now; 
+                sendBend( 5, 0, r_length[bar][half_beat] );
         }
+        //強制關閉該通道所有聲音 (All Notes Off)
+        sendCC( 5, 123, 0 );    
     }
 }
 
 // --- 啟動 ---
-hu_compose();                 // hu_compose(); 
-play_huLead();                // 啟動主旋律
+//hu_compose();                 // hu_compose(); 
+//play_huLead();                // 啟動主旋律
 
-//ma_compose();                   // ma_compose(); 
-//spork ~ play_maLead();          // 啟動主旋律
-//play_maResp();                  // 啟動回應旋律
-
-
+ma_compose();                   // ma_compose(); 
+spork ~ play_maLead();          // 啟動主旋律
+play_maResp();                  // 啟動回應旋律
